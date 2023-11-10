@@ -12,8 +12,8 @@ def loadFile(filepath):
             data = data + linecontent
         print(f"mGRFXVis: loadFile() loaded {filepath} properly")
         return data
-    except:
-        print("mGRFXLib: loadFile() has encountered an error, returning none")
+    except Exception as thingy:
+        print(f"mGRFXLib: loadFile() has encountered {thingy}, returning none")
         return None
     
 def readTag(tag):
