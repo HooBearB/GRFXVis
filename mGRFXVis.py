@@ -7,6 +7,7 @@ import math
 import eyed3
 eyed3.log.setLevel("ERROR")
 import mGRFXLib as mgrfx
+import threading
 version = "0.0.1"
 
 class display:
@@ -48,6 +49,8 @@ class user:
 class current:
     working = False
     gotFile = False
+    music = None
+    filedata = None
     title = "None"
     artist = "None"
     album = "None"
@@ -225,16 +228,25 @@ def checkVolume(music):
         set_music_volume(music, user.volume)
         time.sleep(0.02)
 
-def checkPosition(music, linedata):
-    time = get_music_time_played(music)
-    for object in linedata:
-        if object["t"] < time - 1:
-            linedata.remove(object)
+def checkPosition(time, linedata):
     if len(linedata) > 0:
         if time >= linedata[0]["t"]:
             if current.id == linedata[0]["id"]:
                 print(f"mGRFXVis: {round(linedata[0]['t'], 4)} at {round(time, 4)} {linedata[0]['content']}")
+                linedata.pop(0)
                 current.id = current.id + 1
+
+def seekerThread():
+    while not window_should_close():
+        if current.gotFile:
+            checkPosition(get_music_time_played(current.music), current.filedata)
+
+def playerThread():
+    while not window_should_close():
+        if current.music != None:
+            if is_music_stream_playing(current.music):
+                current.time = get_music_time_played(current.music)
+                update_music_stream(current.music)
 
 
         
@@ -244,26 +256,25 @@ display.font = load_font("monogram.fnt")
 set_target_fps(120)
 setTheme()
 printLayout()
-music = tryFile()
+seeker = threading.Thread(target = seekerThread)
+player = threading.Thread(target = playerThread)
+seeker.start()
+player.start()
+current.music = tryFile()
 while not window_should_close():
     printLayout()
-    if music != None:
-        if is_music_stream_playing(music):
-            update_music_stream(music)
-            current.time = get_music_time_played(music)
     if is_key_down(341) and is_key_down(79):
         if is_key_down(340):
-            filedata = mgrfx.loadFile(promptFile("Select a lyric file", [("mGRFXVis lyric files (.GRV, .txt)", ["*.GRV", "*.txt"]), ("All files", "*.*")]))
-            seek_music_stream(music, 0)
+            seek_music_stream(current.music, 0)
+            current.filedata = mgrfx.loadFile(promptFile("Select a lyric file", [("mGRFXVis lyric files (.GRV, .txt)", ["*.GRV", "*.txt"]), ("All files", "*.*")]))
             current.gotFile = True
             current.id = 0
         else:
-            music = tryFile()
+            current.music = tryFile()
     if is_key_down(84):
         changeTheme()
-    checkPause(music)
-    checkSeek(music)
-    checkVolume(music)
-    if current.gotFile:
-        checkPosition(music, filedata)
+    checkPause(current.music)
+    checkSeek(current.music)
+    checkVolume(current.music)
+seeker.join()
 close_window()
