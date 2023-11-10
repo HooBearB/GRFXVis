@@ -6,7 +6,6 @@ import time
 import math
 import eyed3
 eyed3.log.setLevel("ERROR")
-from playsound import playsound
 import mGRFXLib as mgrfx
 version = "0.0.1"
 
@@ -19,16 +18,16 @@ class display:
     half = (51, 153, 204, 128)
     lit = (51, 153, 204, 255)
 
-    # font = load_font("xSheetRefs.png")
-    # fontEX = load_font_ex("xSheetRefs.png", 119, )
+    font = None
 
 class layout:
-    currentTime = {"x": 10, "y": 10, "size": 100}
-    divider = {"char": "/", "x": 210, "y": 10, "size": 100}
-    fileTime = {"x": 250, "y": 60, "size": 40}
-    mainString = {"x": 10, "y": 110, "size": 150}
-    volume = {"x": 375, "y": 60, "size": 40}
-    status = {"x": 375, "y": 40, "size": 20}
+    header = {"text": f"mGRFXVis {version}", "x": 1350, "y": 15, "size": 20, "spacing": 0}
+    currentTime = {"x": 10, "y": -10, "size": 120, "spacing": -1}
+    divider = {"char": "/", "x": 230, "y": -10, "size": 120, "spacing": 0}
+    fileTime = {"x": 270, "y": 40, "size": 60, "spacing": -1}
+    mainString = {"x": 10, "y": 40, "size": 250, "spacing": -3}
+    volume = {"x": 400, "y": 40, "size": 60, "spacing": -1}
+    status = {"x": 400, "y": 10, "size": 40, "spacing": 0}
 
 themes = {
     "default": [(153, 255, 255, 255), (51, 153, 204, 64), (51, 153, 204, 128), (51, 153, 204, 255)],
@@ -66,7 +65,7 @@ def determineString():
         current.iter = 0
         current.order = current.order + 1
 
-    if current.hold < 150 and current.iter == 0:
+    if current.hold < 20 and current.iter == 0:
         current.hold = current.hold + 1
     else:
         current.hold = 0
@@ -74,7 +73,7 @@ def determineString():
             current.iter = current.iter + 0.1
         current.pause = current.pause + 1
 
-    return displayOrder[current.order % 3][int(current.iter):int(current.iter) + 18]
+    return displayOrder[current.order % 3][int(current.iter):int(current.iter) + 13]
 
 def promptFile(windowTitle, files):
     filepath = filedialog.askopenfilename(title = windowTitle, filetypes = files)
@@ -106,11 +105,11 @@ def changeTheme(theme = None):
             y = 25
             for option in themeList:
                 if option == user.theme:
-                    draw_text(f"- {option}", x, y, 50, display.quarter)
-                    draw_text(f"- {option}", x + 3, y, 50, display.half)
-                    draw_text(f"- {option}", x + 6, y, 50, display.lit)
+                    draw_text_ex(display.font, f"- {option}", (x, y), 50, 2, display.quarter)
+                    draw_text_ex(display.font, f"- {option}", (x + 3, y), 50, 2, display.half)
+                    draw_text_ex(display.font, f"- {option}", (x + 6, y), 50, 2, display.lit)
                 else:
-                    draw_text(option, x, y, 50, display.half)
+                    draw_text_ex(display.font, option, (x, y), 50, 2, display.half)
                 if y >= 180:
                     x = x + 300
                     y = -25
@@ -138,6 +137,7 @@ def loadSong(filepath):
         current.hold = 0
         music = load_music_stream(filepath)
         play_music_stream(music)
+        set_window_title(f"mGRFXVis {version}: {current.title} - {current.artist}")
         print(f"mGRFXVis: loadSong() loaded {current.title} by {current.artist} from {current.album} [{current.length}s]")
         return music, True
     except:
@@ -150,6 +150,7 @@ def loadSong(filepath):
         current.order = 0
         current.iter = 0
         current.hold = 0
+        set_window_title(f"mGRFXVis {version}")
         return None, False
 
 def getRandom():
@@ -169,14 +170,14 @@ def determineStatus():
 def printLayout():
     begin_drawing()
     clear_background(display.unlit)
-    draw_text(f"mGRFXVis {version}", 10, 275, 20, display.lit)
+    draw_text_ex(display.font, layout.header["text"], (layout.header["x"], layout.header["y"]), layout.header["size"], layout.header["spacing"], display.lit)
     fTime = formatTime(current.time)
-    draw_text(fTime, layout.currentTime["x"], layout.currentTime["y"], layout.currentTime["size"], display.lit)
-    draw_text("/", layout.divider["x"], layout.divider["y"], layout.divider["size"], display.lit)
-    draw_text(formatTime(current.length), layout.fileTime["x"], layout.fileTime["y"], layout.fileTime["size"], display.lit)
-    draw_text(determineStatus(), layout.status["x"], layout.status["y"], layout.status["size"], display.half)
-    draw_text(f"Vol {int(user.volume * 100)}", layout.volume["x"], layout.volume["y"], layout.volume["size"], display.lit)
-    draw_text(determineString(), layout.mainString["x"], layout.mainString["y"], layout.mainString["size"], display.lit)
+    draw_text_ex(display.font, fTime, (layout.currentTime["x"], layout.currentTime["y"]), layout.currentTime["size"], layout.currentTime["spacing"], display.lit)
+    draw_text_ex(display.font, "/", (layout.divider["x"], layout.divider["y"]), layout.divider["size"], layout.divider["spacing"], display.lit)
+    draw_text_ex(display.font, formatTime(current.length), (layout.fileTime["x"], layout.fileTime["y"]), layout.fileTime["size"], layout.fileTime["spacing"], display.lit)
+    draw_text_ex(display.font, determineStatus(), (layout.status["x"], layout.status["y"]), layout.status["size"], layout.status["spacing"], display.half)
+    draw_text_ex(display.font, f"Vol {int(user.volume * 100)}", (layout.volume["x"], layout.volume["y"]), layout.volume["size"], layout.volume["spacing"], display.lit)
+    draw_text_ex(display.font, determineString(), (layout.mainString["x"], layout.mainString["y"]), layout.mainString["size"], layout.mainString["spacing"], display.lit)
     end_drawing()
 
 def checkPause(music):
@@ -239,6 +240,7 @@ def checkPosition(music, linedata):
         
 init_audio_device()
 init_window(display.x, display.y, f"mGRFXVis {version}")
+display.font = load_font("monogram.fnt")
 set_target_fps(120)
 setTheme()
 printLayout()

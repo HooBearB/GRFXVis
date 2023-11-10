@@ -61,5 +61,3 @@ def readLine(line):
         object["content"] = rawObject[rawObject.find(">") + 1:]
         data.append(object)
     return data
-
-print(loadFile(r"C:\Users\nbees\Music\femtanyl\CHASER\MURDEREVERY1UKNOW.GRV"))
