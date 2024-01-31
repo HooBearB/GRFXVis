@@ -1,63 +1,73 @@
-def loadFile(filepath):
+def loadFile(filepath : str, debug : bool = False):
     try:
-        file = open(filepath)
+        file = open(filepath, "r")
         lines = file.readlines()
         data = []
-        iter = 0
         for line in lines:
-            linecontent = readLine(line)
-            for item in linecontent:
-                item["id"] = iter
-                iter = iter + 1
-            data = data + linecontent
-        print(f"mGRFXVis: loadFile() loaded {filepath} properly")
+            if debug:
+                print(f"\nfulline {line}")
+            if line != "":
+                data.append(readLine(line, debug))
         return data
-    except Exception as thingy:
-        print(f"mGRFXLib: loadFile() has encountered {thingy}, returning none")
+    except Exception as error:
+        print(f"mGRFXLib: loadFile() has encountered {error}, returning none")
         return None
     
-def readTag(tag):
-    headers = {"m": "float", "s": "float", "x": "int", "y": "int", "f": "int", "l": "int", "h": "int", "q": "int"}
+def readTag(tag : str, debug : bool = False):
+    headers = {"m": "float", "s": "float", "x": "int", "y": "int", "l": "str", "p": "str"}
     tagData = {}
-    char = 0
-    while char < len(tag):
-        if tag[char] in headers.keys():
-            header = tag[char]
-            iter = (char + 1)
-            while tag[iter] not in headers.keys():
-                iter = iter + 1
-                if iter >= len(tag) - 1:
+    enter = 0
+    while enter < len(tag):
+        if tag[enter] in headers.keys():
+            header = tag[enter]
+            exit = enter + 1
+            while tag[exit] != ";":
+                exit = exit + 1
+                if exit >= len(tag):
                     break
-            
-            tagData[header] = tag[char + 1:iter]
-            if headers[header] == "float":
-                tagData[header] = float(tagData[header])
-            if headers[header] == "int":
-                tagData[header] = int(tagData[header])
-        char = char + 1
+            enter = exit + 1
+
+            tagData[header] = tag[enter + 1 : exit]
+            if headers[header] != "str":
+                if tagData[header] != "":
+                    if headers[header] == "float":
+                        tagData[header] = float(tagData[header])
+                    elif headers[header] == "int":
+                        tagData[header] = int(tagData[header])
+                else:
+                    tagData[header] = 0
+        enter = enter + 1
+    total = 0
     if "m" in tagData.keys():
-        if "s" in tagData.keys():
-            tagData["t"] = (tagData["m"] * 60) + tagData["s"]
-        else:
-            tagData["t"] = tagData["m"] * 60
-    elif "s" in tagData.keys():
-        tagData["t"] = tagData["s"]
+        total = total + tagData["m"] * 60
+    if "s" in tagData.keys():
+        total = total + tagData["s"]
+    tagData["t"] = total
     return tagData
 
-def readLine(line):
-    iter = 0
-    rawdata = []
-    while iter < len(line):
-        if line[iter] == "<":
-            end = iter + 1
+def readLine(line, debug : bool = False):
+    start = 0
+    rawData = []
+    while start < len(line):
+        if line[start] == "<":
+            end = start + 1
             while line[end] != "<" and end + 1 < len(line):
                 end = end + 1
-            rawdata.append(line[iter:end])
-            iter = end - 1
-        iter = iter + 1
+            if debug:
+                print(f"contentline {line[start:end]}")
+            rawData.append(line[start:end])
+            start = end - 1
+        start = start + 1
     data = []
-    for rawObject in rawdata:
-        object = readTag(rawObject[:rawObject.find(">") + 1])
+    for rawObject in rawData:
+        if debug:
+            print(f"tagline {rawObject[1:rawObject.find('>')]}")
+        object = readTag(rawObject[:rawObject.find(">")], debug)
         object["content"] = rawObject[rawObject.find(">") + 1:]
         data.append(object)
     return data
+
+test = loadFile("MURDEREVERY1UKNOW.GRV", True)
+print(test)
+for line in test:
+    print(line)

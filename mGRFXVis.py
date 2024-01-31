@@ -1,24 +1,32 @@
 from pyray import *
-from tkinter import filedialog
 import os
-import threading
-import random
-import time
+import json
 import math
+import threading
+import time
+from tkinter import filedialog
 import eyed3
-eyed3.log.setLevel("ERROR")
-import mGRFXLib as mgrfx
-version = "0.0.1"
+from mGRFXLib import *
+version = "0.0.2"
 
 class display:
+    # Width of display
     x = 1500
+    # Height of display
     y = 300
 
+    # Background colour
     unlit = (153, 255, 255, 255)
+    # Quarter accent colour
     quarter = (51, 153, 204, 64)
+    # Half accent colour
     half = (51, 153, 204, 128)
+    # Content colour
     lit = (51, 153, 204, 255)
 
+    # Font file initially is none in case loading the font errors
+    # Doing this allows raylib to return to default fonts
+    fontPath = "monogram.fnt"
     font = None
 
 class layout:
@@ -48,233 +56,194 @@ class user:
     loop = True
 
 class current:
-    working = False
-    gotFile = False
-    music = None
-    filedata = None
+    path = None
+    stream = None
     title = "None"
     artist = "None"
     album = "None"
     time = 0
     length = 0
-    order = 0
-    iter = 0
-    hold = 0
-    pause = 0
-    id = 0
+    status = "Stopped"
 
-def determineString():
-    displayOrder = ["Title: " + current.title, "Artist: " + current.artist, "Album: " + current.album]
-    if current.iter > len(displayOrder[current.order % 3]):
-        current.iter = 0
-        current.order = current.order + 1
-
-    if current.hold < 20 and current.iter == 0:
-        current.hold = current.hold + 1
+def loadSettings():
+    if os.path.exists("settings.json"):
+        settings = json.load(open("settings.json", "r"))
+        print("mGRFXVis: Opening settings.json for reading...")
+        display.x = settings.get("screenX", 1500)
+        display.y = settings.get("screenY", 300)
+        display.fontPath = settings.get("font", "monogram.fnt")
+        user.theme = settings.get("theme", "default")
+        user.volume = settings.get("volume", 1.0)
+        user.loop = settings.get("loop", True)
+        current.path = settings.get("lastFile", None)
+        print("mGRFXVis: settings.json read!")
     else:
-        current.hold = 0
-        if current.pause % 4 == 0:
-            current.iter = current.iter + 0.1
-        current.pause = current.pause + 1
+        settings = open("settings.json", "w")
+        print("mGRFXVis: Opening settings.json for writing...")
+        settings.write("{\n}")
+        print("mGRFXVis: Null file written!")
+        settings.close()
 
-    return displayOrder[current.order % 3][int(current.iter):int(current.iter) + 13]
+def dumpSettings():
+    file = open("settings.json", "w")
+    print("mGRFXVis: Opening settings.json for writing...")
+    settings = { 
+        "screenX": display.x,
+        "screenY": display.y,
+        "font": display.fontPath,
+        "theme": user.theme,
+        "volume": user.volume,
+        "loop": user.loop,
+        "lastFile": current.path
+    }
+    print("mGRFXVis: Settings formatted!")
+    json.dump(file, settings)
+    print("mGRFXVis: Settings dumped!")
 
-def promptFile(windowTitle, files):
+def setTheme(theme : str = "default"):
+    if theme in themes:
+        display.unlit = themes[theme][0]
+        display.quarter = themes[theme][1]
+        display.half = themes[theme][2]
+        display.lit = themes[theme][3]
+
+formatTime = lambda time : f"{math.floor(time / 60)}:{math.floor(time % 60):02d}"
+roundFloat = lambda value, base : base * round(value / base)
+
+def promptFile(windowTitle : str = f"mGRFXVis {version}", files : list = ("All files", "*.*")):
     filepath = filedialog.askopenfilename(title = windowTitle, filetypes = files)
     if filepath == "":
         filepath = None
     print(f"mGRFXVis: promptFile() returned with {filepath}")
     return filepath
 
-def formatTime(time):
-    return f"{math.floor(time / 60)}:{math.floor(time % 60):02d}"
+def loadSong(filepath : str = None):
+    if filepath == None:
+        filepath = promptFile("mGRFXVis - Select Music", [("Audio files (.mp3, .wav, .ogg, .flac)", ["*.mp3", "*.wav", "*.ogg", "*.flac"]), ("mGRFXVis lyric files (.GRV, .txt)", ["*.GRV", "*.txt"]), ("All files", "*.*")])
+    if filepath != None:
+        try:
+            file = eyed3.load(filepath)
+            current.artist = file.tag.artist
+            current.title = file.tag.title
+            current.album = file.tag.album
+            current.length = file.info.time_secs
+            current.stream = load_music_stream(filepath)
+            set_window_title(f"mGRFXVis {version}: {current.title} - {current.artist}")
+            print(f"mGRFXVis: Track {current.title} by {current.artist} off of {current.album} loaded!")
+            print(f"mGRFXVis: Track length is {current.length} seconds")
+            play_music_stream(current.stream)
+            current.status = "Playing"
+        except:
+            current.title = "None"
+            current.artist = "None"
+            current.album = "None"
+            current.time = 0
+            current.length = 0
+            current.stream = None
+            set_window_title(f"mGRFXVis {version}")
+            current.status = "Stopped"
 
-def setTheme(theme = None):
-    if theme == None:
-        display.unlit = themes[user.theme][0]
-        display.quarter = themes[user.theme][1]
-        display.half = themes[user.theme][2]
-        display.lit = themes[user.theme][3]
-    else:
-        user.theme = theme
-
-def changeTheme(theme = None):
-    themeList = list(themes.keys())
-    select = themeList.index(user.theme)
-    if theme == None:
-        while not is_key_down(257):
-            begin_drawing()
-            clear_background(display.unlit)
-            x = 50
-            y = 25
-            for option in themeList:
-                if option == user.theme:
-                    draw_text_ex(display.font, f"- {option}", (x, y), 50, 2, display.quarter)
-                    draw_text_ex(display.font, f"- {option}", (x + 3, y), 50, 2, display.half)
-                    draw_text_ex(display.font, f"- {option}", (x + 6, y), 50, 2, display.lit)
-                else:
-                    draw_text_ex(display.font, option, (x, y), 50, 2, display.half)
-                if y >= 180:
-                    x = x + 300
-                    y = -25
-                y = y + 50
-            end_drawing()
-            if is_key_down(265) and select - 1 >= 0:
-                select = select - 1
-            elif is_key_down(264) and select + 1 < len(themeList):
-                select = select + 1
-            user.theme = themeList[select]
-            setTheme()
-            time.sleep(0.2)
-    else:
-        setTheme(theme)
-
-def loadSong(filepath):
-    try:
-        file = eyed3.load(filepath)
-        current.artist = file.tag.artist
-        current.title = file.tag.title
-        current.album = file.tag.album
-        current.length = file.info.time_secs
-        current.order = 0
-        current.iter = 0
-        current.hold = 0
-        music = load_music_stream(filepath)
-        play_music_stream(music)
-        set_window_title(f"mGRFXVis {version}: {current.title} - {current.artist}")
-        print(f"mGRFXVis: loadSong() loaded {current.title} by {current.artist} from {current.album} [{current.length}s]")
-        return music, True
-    except:
-        print(f"mGRFXVis: loadSong() was not able to return music object")
-        current.title = "None"
-        current.artist = "None"
-        current.album = "None"
-        current.time = 0
-        current.length = 0
-        current.order = 0
-        current.iter = 0
-        current.hold = 0
-        set_window_title(f"mGRFXVis {version}")
-        return None, False
-
-def getRandom():
-    return random.choice(os.listdir("C:\\"))
-
-def tryFile():
-    music, current.working = loadSong(promptFile("Select a track", [("Audio files (.mp3, .wav, .ogg, .flac)", ["*.mp3", "*.wav", "*.ogg", "*.flac"]), ("All files", "*.*")]))
-    current.gotFile = False
-    return music
-
-def determineStatus():
-    if current.working:
-        return "Playing"
-    else:
-        return "Stopped"
-
-def printLayout():
+def printLayout(mainLine : str = ""):
     begin_drawing()
     clear_background(display.unlit)
     draw_text_ex(display.font, layout.header["text"], (layout.header["x"], layout.header["y"]), layout.header["size"], layout.header["spacing"], display.lit)
-    fTime = formatTime(current.time)
-    draw_text_ex(display.font, fTime, (layout.currentTime["x"], layout.currentTime["y"]), layout.currentTime["size"], layout.currentTime["spacing"], display.lit)
+    draw_text_ex(display.font, formatTime(current.time), (layout.currentTime["x"], layout.currentTime["y"]), layout.currentTime["size"], layout.currentTime["spacing"], display.lit)
     draw_text_ex(display.font, "/", (layout.divider["x"], layout.divider["y"]), layout.divider["size"], layout.divider["spacing"], display.lit)
     draw_text_ex(display.font, formatTime(current.length), (layout.fileTime["x"], layout.fileTime["y"]), layout.fileTime["size"], layout.fileTime["spacing"], display.lit)
-    draw_text_ex(display.font, determineStatus(), (layout.status["x"], layout.status["y"]), layout.status["size"], layout.status["spacing"], display.half)
-    draw_text_ex(display.font, f"Vol {int(user.volume * 100)}", (layout.volume["x"], layout.volume["y"]), layout.volume["size"], layout.volume["spacing"], display.lit)
-    draw_text_ex(display.font, determineString(), (layout.mainString["x"], layout.mainString["y"]), layout.mainString["size"], layout.mainString["spacing"], display.lit)
+    draw_text_ex(display.font, current.status, (layout.status["x"], layout.status["y"]), layout.status["size"], layout.status["spacing"], display.half)
+    draw_text_ex(display.font, f"Vol {roundFloat(int(user.volume * 100), 5)}", (layout.volume["x"], layout.volume["y"]), layout.volume["size"], layout.volume["spacing"], display.lit)
+    draw_text_ex(display.font, mainLine, (layout.mainString["x"], layout.mainString["y"]), layout.mainString["size"], layout.mainString["spacing"], display.lit)
     end_drawing()
 
-def checkPause(music):
-    if is_key_down(32):
-        if current.working == True:
-            current.working = False
-            pause_music_stream(music)
-        else:
-            current.working = True
-            resume_music_stream(music)
-        time.sleep(0.2)
-
-def checkSeek(music):
-    if is_key_down(262):
-        if not is_key_down(340):
-            if current.time + 5 < current.length:
-                seek_music_stream(music, current.time + 5)
-            else:
-                current.time = 0
-                seek_music_stream(music, current.time)
-        else:
-            seek_music_stream(music, 0)
-        time.sleep(0.2)
-    if is_key_down(263):
-        if current.time - 5 >= 0:
-            seek_music_stream(music, current.time - 5)
-        else:
-            current.time = 0
-            seek_music_stream(music, current.time)
-        time.sleep(0.2)
-
-def checkVolume(music):
-    if is_key_down(265):
-        if user.volume + 0.01 <= 1:
-            user.volume = user.volume + 0.01
-        else:
-            user.volume = 1
-        set_music_volume(music, user.volume)
-        time.sleep(0.02)
-    if is_key_down(264):
-        if user.volume - 0.01 >= 0:
-            user.volume = user.volume - 0.01
-        else:
-            user.volume = 0
-        set_music_volume(music, user.volume)
-        time.sleep(0.02)
-
-def checkPosition(time, linedata):
-    if len(linedata) > 0:
-        if time >= linedata[0]["t"]:
-            if current.id == linedata[0]["id"]:
-                print(f"mGRFXVis: {round(linedata[0]['t'], 4)} at {round(time, 4)} {linedata[0]['content']}")
-                linedata.pop(0)
-                current.id = current.id + 1
-
-def seekerThread():
+def displayScreen():
+    print("mGRFXVis: Display thread started!")
     while not window_should_close():
-        if current.gotFile:
-            checkPosition(get_music_time_played(current.music), current.filedata)
+        display = [f"Title: {current.title}", f"Artist: {current.artist}", f"Album: {current.album}"]
+        printLayout()
+    print("mGRFXVis: Display thread closed!")
 
-def playerThread():
+def senseInput():
+    print("mGRFXVis: Input thread started!")
     while not window_should_close():
-        if current.music != None:
-            if is_music_stream_playing(current.music):
-                current.time = get_music_time_played(current.music)
-                update_music_stream(current.music)
+        if is_key_down(341) and is_key_down(79):
+            current.status = "Loading"
+            print("mGRFXVis: Loading track file...")
+            loadSong()
+        if current.stream != None:
+            if is_key_down(32):
+                if is_music_stream_playing(current.stream):
+                    pause_music_stream(current.stream)
+                    current.status = "Stopped"
+                    time.sleep(0.5)
+                else:
+                    resume_music_stream(current.stream)
+                    current.status = "Playing"
+                    time.sleep(0.5)
+            elif is_key_down(262):
+                if not is_key_down(340):
+                    if current.time + 5 < current.length:
+                        seek_music_stream(current.stream, current.time + 5)
+                        current.status = "Fast-forwarding"
+                    else:
+                        current.time = 0
+                        seek_music_stream(current.stream, current.time)
+                else:
+                    seek_music_stream(current.stream, 0)
+                time.sleep(0.5)
+            elif is_key_down(263):
+                if current.time - 5 >= 0:
+                    seek_music_stream(current.stream, current.time - 5)
+                    current.status = "Rewinding"
+                else:
+                    current.time = 0
+                    seek_music_stream(current.stream, current.time)
+                time.sleep(0.5)
+            elif is_key_down(265):
+                if user.volume + 0.05 <= 1:
+                    user.volume = user.volume + 0.05
+                else:
+                    user.volume = 1
+                set_music_volume(current.stream, user.volume)
+                time.sleep(0.1)
+            elif is_key_down(264):
+                if user.volume - 0.05 >= 0:
+                    user.volume = user.volume - 0.05
+                else:
+                    user.volume = 0
+                set_music_volume(current.stream, user.volume)
+                time.sleep(0.1)
+            elif user.volume <= 0:
+                current.status = "Muted"
+            elif is_music_stream_playing(current.stream):
+                current.status = "Playing"
+            
+    print("mGRFXVis: Input thread closed!")
+    close_window()
+
+def playStream():
+    print("mGRFXVis: Player thread started!")
+    while not window_should_close():
+        if current.stream != None:
+            if is_music_stream_playing(current.stream):
+                current.time = get_music_time_played(current.stream)
+                update_music_stream(current.stream)
+    print("mGRFXVis: Player thread closed!")
+    close_window()
 
 
-        
+
 init_audio_device()
+loadSettings()
 init_window(display.x, display.y, f"mGRFXVis {version}")
-display.font = load_font("monogram.fnt")
-set_target_fps(120)
-setTheme()
+display.font = load_font(display.fontPath)
 printLayout()
-seeker = threading.Thread(target = seekerThread)
-player = threading.Thread(target = playerThread)
-seeker.start()
-player.start()
-current.music = tryFile()
+musicHandler = threading.Thread(target = playStream)
+inputHandler = threading.Thread(target = senseInput)
+musicHandler.start()
+time.sleep(0.2)
+inputHandler.start()
 while not window_should_close():
     printLayout()
-    if is_key_down(341) and is_key_down(79):
-        if is_key_down(340):
-            seek_music_stream(current.music, 0)
-            current.filedata = mgrfx.loadFile(promptFile("Select a lyric file", [("mGRFXVis lyric files (.GRV, .txt)", ["*.GRV", "*.txt"]), ("All files", "*.*")]))
-            current.gotFile = True
-            current.id = 0
-        else:
-            current.music = tryFile()
-    if is_key_down(84):
-        changeTheme()
-    checkPause(current.music)
-    checkSeek(current.music)
-    checkVolume(current.music)
+    if window_should_close():
+        dumpSettings()
 close_window()
