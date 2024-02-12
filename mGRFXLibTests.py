@@ -18,9 +18,11 @@ class TestStringMethods(unittest.TestCase):
         self.assertEqual(readTag("m0"), {"m": 0, "t": 0})
         self.assertEqual(readTag("m1"), {"m": 1, "t": 60})
         self.assertEqual(readTag("m1;"), {"m": 1, "t": 60})
+        self.assertEqual(readTag("m3;"), {"m": 3, "t": 180})
 
     def testSecondsMinutes(self):
         self.assertEqual(readTag("m1;s20"), {"m": 1, "s": 20, "t": 80})
+        self.assertEqual(readTag("m2;s16.56"), {"m": 2, "s": 16.56, "t": 136.56})
 
     def testPath(self):
         self.assertEqual(readTag("pPATH.flac"), {"p": "PATH.flac", "t": 0})

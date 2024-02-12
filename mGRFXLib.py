@@ -14,7 +14,7 @@ def loadFile(filepath : str, debug : bool = False):
         return None
     
 def readTag(tag : str, debug : bool = False):
-    headers = {"m": "float", "s": "float", "x": "int", "y": "int", "l": "str", "p": "str"}
+    headers = {"m": "int", "s": "float", "x": "int", "y": "int", "l": "str", "p": "str"}
     tagData = {}
     enter = 0
     while enter < len(tag):
@@ -25,8 +25,6 @@ def readTag(tag : str, debug : bool = False):
                 exit = exit + 1
                 if exit >= len(tag):
                     break
-            enter = exit + 1
-
             tagData[header] = tag[enter + 1 : exit]
             if headers[header] != "str":
                 if tagData[header] != "":
@@ -36,6 +34,7 @@ def readTag(tag : str, debug : bool = False):
                         tagData[header] = int(tagData[header])
                 else:
                     tagData[header] = 0
+            enter = exit
         enter = enter + 1
     total = 0
     if "m" in tagData.keys():
@@ -66,8 +65,3 @@ def readLine(line, debug : bool = False):
         object["content"] = rawObject[rawObject.find(">") + 1:]
         data.append(object)
     return data
-
-test = loadFile("MURDEREVERY1UKNOW.GRV", True)
-print(test)
-for line in test:
-    print(line)
